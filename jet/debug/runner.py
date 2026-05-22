@@ -105,10 +105,14 @@ class JetDebugger(bdb.Bdb):
         self._pause(frame)
 
     def user_return(self, frame, return_value) -> None:
-        del return_value
+        del frame, return_value
         if self._step_mode == "out":
-            self._step_mode = None
-            self._pause(frame)
+            # We're at the return of the function being stepped out of. Don't
+            # pause here (that would still be inside the callee). Switch to a
+            # plain step so the very next user_line fires in the caller frame,
+            # and pause there.
+            self._step_mode = "over"
+            self.set_step()
 
     def user_exception(self, frame, exc_info) -> None:
         exc_type, exc_value, tb = exc_info
