@@ -9,7 +9,7 @@ from textual.app import ComposeResult
 from textual.containers import ScrollableContainer
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Label, Select, Static, Switch
+from textual.widgets import Input, Label, Select, Static, Switch
 
 from .theme import THEMES
 
@@ -21,6 +21,9 @@ class EditorConfig:
     use_tabs: bool = False
     show_line_numbers: bool = True
     soft_wrap: bool = False
+    debug_terminal_command: str = (
+        'osascript -e \'tell application "LiquidTerminal" to do script "{cmd}"\''
+    )
 
 
 class SettingsPanel(Widget):
@@ -89,6 +92,12 @@ class SettingsPanel(Widget):
             yield Switch(value=self._config.show_line_numbers, id="sw-lines")
             yield Label("Soft wrap")
             yield Switch(value=self._config.soft_wrap, id="sw-wrap")
+            yield Label("Debug terminal command")
+            yield Input(
+                value=self._config.debug_terminal_command,
+                id="inp-debug-cmd",
+                placeholder='osascript -e \'tell application "X" to do script "{cmd}"\'',
+            )
 
     @on(Select.Changed, "#sel-theme")
     def _on_theme(self, e: Select.Changed) -> None:
@@ -115,4 +124,9 @@ class SettingsPanel(Widget):
     @on(Switch.Changed, "#sw-wrap")
     def _on_wrap(self, e: Switch.Changed) -> None:
         self._config = replace(self._config, soft_wrap=e.value)
+        self.post_message(self.ConfigChanged(self._config))
+
+    @on(Input.Changed, "#inp-debug-cmd")
+    def _on_debug_cmd(self, e: Input.Changed) -> None:
+        self._config = replace(self._config, debug_terminal_command=e.value)
         self.post_message(self.ConfigChanged(self._config))
