@@ -13,6 +13,9 @@ from textual.containers import Horizontal
 from textual.reactive import reactive
 from textual.widgets import DirectoryTree, Select, Static, TabbedContent, TabPane
 
+from .debug.controller import DebugController
+from .debug.panel import DebugPanel
+from .debug.protocol import Exception_, Exited, Paused
 from .editor import JetEditor
 from .screens import (
     CommandPaletteScreen,
@@ -88,6 +91,7 @@ class JetApp(App):
         self._last_search: str | None = None
         self._editor_config: EditorConfig = EditorConfig()
         self._active_sidebar: str = "tree"  # "tree" or "settings"
+        self.debug_controller = DebugController(on_event=self._on_debug_event)
 
     # ------------------------------------------------------------------ compose
 
@@ -95,6 +99,7 @@ class JetApp(App):
         with Horizontal(id="workspace"):
             yield JetTree(str(self.workspace), id="sidebar-tree")
             yield SettingsPanel(self._editor_config, id="sidebar-settings")
+            yield DebugPanel(self.debug_controller, id="sidebar-debug")
             yield TabbedContent(id="tabs")
         yield _StatusBar(id="statusbar")
 
@@ -102,6 +107,10 @@ class JetApp(App):
         # ansi-dark uses ANSI defaults → no opaque bg → terminal transparency shows through.
         self.theme = "ansi-dark"
         self.query_one("#sidebar-settings").display = False
+        self.query_one("#sidebar-debug").display = False
+        panel = self.query_one(DebugPanel)
+        panel.on_run_requested = self._debug_run
+        panel.on_stop_requested = self.debug_controller.stop
         if self._initial_paths:
             for p in self._initial_paths:
                 await self.open_file(p)
@@ -131,6 +140,7 @@ class JetApp(App):
         self._tab_counter += 1
         tab_id = f"tab-{self._tab_counter}"
         editor = JetEditor(text=text, path=path, config=self._editor_config, id=f"ed-{self._tab_counter}")
+        editor.on_breakpoint_toggle_request = lambda line, e=editor: self._toggle_bp(e, line)
         title = self._tab_title(path)
         await tabs.add_pane(TabPane(title, editor, id=tab_id))
         tabs.active = tab_id
@@ -141,6 +151,7 @@ class JetApp(App):
         self._tab_counter += 1
         tab_id = f"tab-{self._tab_counter}"
         editor = JetEditor(text="", path=None, config=self._editor_config, id=f"ed-{self._tab_counter}")
+        editor.on_breakpoint_toggle_request = lambda line, e=editor: self._toggle_bp(e, line)
         await tabs.add_pane(TabPane("untitled", editor, id=tab_id))
         tabs.active = tab_id
         editor.focus()
@@ -165,6 +176,52 @@ class JetApp(App):
     def _tab_title(path: Path) -> str:
         return path.name or str(path)
 
+    # ------------------------------------------------------------------ debug
+
+    async def _debug_run(self) -> None:
+        ed = self._active_editor()
+        if ed is None:
+            self.notify("No active editor", severity="warning")
+            return
+        if ed.path is None or ed.path.suffix != ".py":
+            buf_text = ed.text if ed.path is None or ed.modified else None
+            target = ed.path or self.workspace / "untitled.py"
+        else:
+            buf_text = ed.text if ed.modified else None
+            target = ed.path
+        try:
+            await self.debug_controller.start(
+                target=target,
+                buffer_text=buf_text,
+                terminal_template=self._editor_config.debug_terminal_command,
+            )
+        except Exception as e:
+            self.notify(f"Could not start debug: {e}", severity="error")
+
+    def _on_debug_event(self, ev) -> None:
+        panel = self.query_one(DebugPanel)
+        panel.handle_event(ev)
+        panel.refresh_breakpoints(self.debug_controller.breakpoints)
+        ed = self._active_editor()
+        if ed is None:
+            return
+        if isinstance(ev, Paused):
+            if ed.path is not None and str(ed.path) == ev.file:
+                ed.set_current_exec_line(ev.line)
+                ed.read_only = True
+        elif isinstance(ev, (Exited, Exception_)):
+            ed.set_current_exec_line(None)
+            ed.read_only = False
+
+    def _toggle_bp(self, editor, line: int) -> None:
+        if editor.path is None:
+            self.notify("Save the buffer before setting breakpoints", severity="warning")
+            return
+        self.debug_controller.toggle_breakpoint(editor.path, line)
+        editor.set_breakpoints(self.debug_controller.get_breakpoints(editor.path))
+        panel = self.query_one(DebugPanel)
+        panel.refresh_breakpoints(self.debug_controller.breakpoints)
+
     # ------------------------------------------------------------------ events
 
     @on(DirectoryTree.FileSelected)
@@ -184,24 +241,24 @@ class JetApp(App):
     # ------------------------------------------------------------------ actions
 
     def action_toggle_sidebar(self) -> None:
-        sid = "#sidebar-tree" if self._active_sidebar == "tree" else "#sidebar-settings"
+        sid = {"tree": "#sidebar-tree", "settings": "#sidebar-settings", "debug": "#sidebar-debug"}[
+            self._active_sidebar
+        ]
         w = self.query_one(sid)
         w.display = not w.display
 
     def action_cycle_sidebars(self) -> None:
-        tree = self.query_one("#sidebar-tree")
-        settings = self.query_one("#sidebar-settings")
-        if tree.display:
-            tree.display = False
-            settings.display = True
-            self._active_sidebar = "settings"
-        elif settings.display:
-            settings.display = False
-            tree.display = True
-            self._active_sidebar = "tree"
-        else:
-            tree.display = True
-            self._active_sidebar = "tree"
+        order = ["tree", "settings", "debug"]
+        ids = {"tree": "#sidebar-tree", "settings": "#sidebar-settings", "debug": "#sidebar-debug"}
+        cur = self._active_sidebar
+        cur_w = self.query_one(ids[cur])
+        if not cur_w.display:
+            cur_w.display = True
+            return
+        cur_w.display = False
+        nxt = order[(order.index(cur) + 1) % len(order)]
+        self.query_one(ids[nxt]).display = True
+        self._active_sidebar = nxt
 
     @on(SettingsPanel.ConfigChanged)
     def on_config_changed(self, event: SettingsPanel.ConfigChanged) -> None:

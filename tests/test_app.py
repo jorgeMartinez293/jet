@@ -94,3 +94,16 @@ async def test_save_writes_file(tmp_path: Path):
         await pilot.press("ctrl+s")
         await pilot.pause()
         assert f.read_text() == "x=1"
+
+
+@pytest.mark.asyncio
+async def test_sidebar_cycle_includes_debug(tmp_path):
+    from jet.app import JetApp
+    f = tmp_path / "x.py"
+    f.write_text("a=1\n")
+    app = JetApp([f])
+    async with app.run_test() as pilot:
+        # Cycle once: tree -> settings -> debug
+        await pilot.press("ctrl+b")
+        await pilot.press("ctrl+b")
+        assert app.query_one("#sidebar-debug").display is True
