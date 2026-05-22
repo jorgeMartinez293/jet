@@ -11,7 +11,7 @@ import uuid
 from pathlib import Path
 from typing import Callable
 
-import jet.debug.terminal as terminal
+from jet.debug import terminal
 from jet.debug.protocol import (
     Continue, Exception_, Exited, Message, Paused, Ready, SetBreakpoints,
     StepInto, StepOut, StepOver, Stop, decode, encode,
@@ -41,7 +41,6 @@ class DebugController:
         self._sock_path: str | None = None
         self._temp_file: Path | None = None
         self._target: Path | None = None
-        self._edit_target: Path | None = None
         self._read_task: asyncio.Task | None = None
         self._error: str | None = None
 
@@ -56,11 +55,7 @@ class DebugController:
             s.add(line)
             on = True
         if self.state in (DebugState.RUNNING, DebugState.PAUSED) and self._writer is not None:
-            resolved = file.resolve()
-            wire_file = self._target if (
-                self._target is not None and resolved == self._edit_target
-            ) else resolved
-            self._send(SetBreakpoints(file=str(wire_file), lines=sorted(s)))
+            self._send(SetBreakpoints(file=str(file.resolve()), lines=sorted(s)))
         return on
 
     def get_breakpoints(self, file: Path) -> set[int]:
@@ -82,10 +77,6 @@ class DebugController:
         self._error = None
 
         # Resolve target / temp file.
-        # `_edit_target` is the path the editor knows the buffer by — what
-        # `breakpoints` is keyed under. `_target` is the path actually executed
-        # by the runner (a temp file when the buffer is unsaved/modified).
-        self._edit_target = target.resolve()
         if buffer_text is not None:
             tf = tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w", encoding="utf-8")
             tf.write(buffer_text)
@@ -94,7 +85,7 @@ class DebugController:
             self._target = self._temp_file
         else:
             self._temp_file = None
-            self._target = self._edit_target
+            self._target = target.resolve()
 
         # Socket path.
         self._sock_path = os.path.join(tempfile.gettempdir(), f"jet-debug-{uuid.uuid4().hex}.sock")
@@ -125,13 +116,11 @@ class DebugController:
             return
 
         # Read Ready, send BPs and Continue.
-        assert self._reader is not None
         first = decode(await self._reader.readline())
         assert isinstance(first, Ready)
 
         for f, lines in self.breakpoints.items():
-            wire_file = self._target if f == self._edit_target else f
-            self._send(SetBreakpoints(file=str(wire_file), lines=sorted(lines)))
+            self._send(SetBreakpoints(file=str(f), lines=sorted(lines)))
         if not self.breakpoints:
             self._send(SetBreakpoints(file=str(self._target), lines=[]))
         self._send(Continue())

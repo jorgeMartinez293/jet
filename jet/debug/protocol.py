@@ -6,7 +6,7 @@ Pure data + (de)serialization. No I/O.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any, Union
 
 
@@ -79,13 +79,12 @@ Message = Union[
 ]
 
 
-_ALL_MESSAGES: tuple[type, ...] = (
-    Ready, Paused, Exception_, Exited,
-    SetBreakpoints, Continue, StepOver, StepInto, StepOut, Stop,
-)
-
 _BY_TYPE: dict[str, type] = {
-    cls.__dataclass_fields__["type"].default: cls for cls in _ALL_MESSAGES
+    cls().type if cls in (Ready, Continue, StepOver, StepInto, StepOut, Stop) else cls.__dataclass_fields__["type"].default: cls  # type: ignore[misc]
+    for cls in (
+        Ready, Paused, Exception_, Exited,
+        SetBreakpoints, Continue, StepOver, StepInto, StepOut, Stop,
+    )
 }
 
 

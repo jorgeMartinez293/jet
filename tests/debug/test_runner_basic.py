@@ -14,14 +14,10 @@ from jet.debug.protocol import (
 FIXTURE = Path(__file__).parent / "fixtures" / "simple.py"
 
 
-async def _accept_one(
-    sock_path: str,
-) -> tuple[asyncio.base_events.Server, asyncio.Future[tuple[asyncio.StreamReader, asyncio.StreamWriter]]]:
-    fut: asyncio.Future[tuple[asyncio.StreamReader, asyncio.StreamWriter]] = (
-        asyncio.get_event_loop().create_future()
-    )
+async def _accept_one(sock_path: str) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    fut: asyncio.Future = asyncio.get_event_loop().create_future()
 
-    async def cb(r: asyncio.StreamReader, w: asyncio.StreamWriter) -> None:
+    async def cb(r, w):
         if not fut.done():
             fut.set_result((r, w))
 

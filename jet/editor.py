@@ -33,18 +33,18 @@ class JetEditor(TextArea):
         else:
             self.post_message(self.BreakpointToggleRequested(self, line_1based))
 
-    async def _on_click(self, event) -> None:  # type: ignore[override]
+    def _on_click(self, event) -> None:  # type: ignore[override]
         meta = getattr(event, "meta", False) or getattr(event, "alt", False)
         if meta:
             try:
                 line0, _ = self.get_target_document_location(event)
             except Exception:
-                await super()._on_click(event)
+                super()._on_click(event)
                 return
             self.request_breakpoint_toggle(line0 + 1)
             event.stop()
             return
-        await super()._on_click(event)
+        super()._on_click(event)
 
     DEFAULT_CSS = """
     JetEditor {
@@ -138,23 +138,13 @@ class JetEditor(TextArea):
             return strip
         from textual.strip import Strip
         from rich.segment import Segment
-        from rich.style import Style
         segs = list(strip)
         if not segs:
             return strip
         first = segs[0]
-        if not first.text:
-            return strip
-        marker_style = Style.parse(str(marker.style)) if marker.style else None
-        if self.show_line_numbers:
-            # Recolor existing line-number digits in the marker color; leave
-            # the text content alone so digits remain readable.
-            segs[0] = Segment(first.text, marker_style)
-        else:
-            # No line numbers: replace the first cell with the marker glyph.
-            glyph = marker.plain
-            tail = first.text[len(glyph):] if len(first.text) > len(glyph) else ""
-            segs[0] = Segment(glyph + tail, marker_style)
+        if first.text:
+            new_first = Segment(marker.plain + first.text[len(marker.plain):], first.style)
+            segs[0] = new_first
         return Strip(segs, strip.cell_length)
 
     def apply_config(self, config: EditorConfig) -> None:

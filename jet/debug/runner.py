@@ -8,7 +8,9 @@ external terminal's tty.
 from __future__ import annotations
 
 import bdb
+import json
 import reprlib
+import runpy
 import socket
 import sys
 import traceback
@@ -37,6 +39,7 @@ def _safe_repr(v: Any) -> str:
 
 def _filter_globals(g: dict[str, Any]) -> dict[str, str]:
     out: dict[str, str] = {}
+    import builtins
     for k, v in g.items():
         if k.startswith("__") and k not in ("__name__", "__file__"):
             continue
@@ -105,14 +108,9 @@ class JetDebugger(bdb.Bdb):
         self._pause(frame)
 
     def user_return(self, frame, return_value) -> None:
-        del frame, return_value
         if self._step_mode == "out":
-            # We're at the return of the function being stepped out of. Don't
-            # pause here (that would still be inside the callee). Switch to a
-            # plain step so the very next user_line fires in the caller frame,
-            # and pause there.
-            self._step_mode = "over"
-            self.set_step()
+            self._step_mode = None
+            self._pause(frame)
 
     def user_exception(self, frame, exc_info) -> None:
         exc_type, exc_value, tb = exc_info
@@ -231,11 +229,10 @@ def main(argv: list[str]) -> int:
 
         io.send(Exited(code=code))
     finally:
-        if sys.stdin.isatty():
-            try:
-                input("\n[Debug session ended — press Enter to close]")
-            except (EOFError, KeyboardInterrupt):
-                pass
+        try:
+            input("\n[Debug session ended — press Enter to close]")
+        except (EOFError, KeyboardInterrupt):
+            pass
         io.close()
     return 0
 

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import inspect
 from pathlib import Path
-from typing import Any, cast
-from collections.abc import Awaitable
+from typing import Any
 
 from textual import on
 from textual.app import ComposeResult
@@ -132,12 +130,11 @@ class DebugPanel(Widget):
 
     async def _ctrl_start(self) -> None:
         # Filled in by App which knows the active editor + buffer.
-        hook = self.on_run_requested
-        if callable(hook):
-            result = hook()
-            if inspect.isawaitable(result):
-                await cast(Awaitable[Any], result)
+        if callable(self.on_run_requested):
+            await self.on_run_requested()
         else:
+            # Fallback: directly invoke controller.start (used in tests where
+            # no App wires on_run_requested).
             await self._ctrl.start()
 
     on_run_requested: Any = None
@@ -145,11 +142,8 @@ class DebugPanel(Widget):
 
     @on(Button.Pressed, "#btn-stop")
     async def _stop(self) -> None:
-        hook = self.on_stop_requested
-        if callable(hook):
-            result = hook()
-            if inspect.isawaitable(result):
-                await cast(Awaitable[Any], result)
+        if callable(self.on_stop_requested):
+            await self.on_stop_requested()
 
     @on(Button.Pressed, "#btn-continue")
     async def _cont(self) -> None:

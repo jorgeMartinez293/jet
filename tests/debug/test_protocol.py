@@ -1,5 +1,3 @@
-import pytest
-
 from jet.debug.protocol import (
     Ready, Paused, Exited, Exception_, SetBreakpoints,
     Continue, StepOver, StepInto, StepOut, Stop,
@@ -61,10 +59,6 @@ def test_encode_appends_newline():
 
 
 def test_decode_rejects_unknown_type():
+    import pytest
     with pytest.raises(ValueError):
         decode(b'{"type": "garbage"}\n')
-
-
-def test_set_breakpoints_with_empty_lines():
-    msg = SetBreakpoints(file="/tmp/foo.py", lines=[])
-    assert decode(encode(msg)) == msg

@@ -33,6 +33,12 @@ async def _spawn(sock: str, target: Path):
     return server, proc, reader, writer
 
 
+async def _drive(reader, writer, commands_after_pause):
+    """Generator helper: hand-shake, set BPs, then alternate pause/command."""
+    assert decode(await asyncio.wait_for(reader.readline(), 2)) == Ready()
+    yield None
+
+
 @pytest.mark.asyncio
 async def test_step_over_does_not_enter_function():
     with tempfile.TemporaryDirectory() as td:
