@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from rich.text import Text
 from textual import events
 from textual.widgets import TextArea
 
@@ -82,6 +83,40 @@ class JetEditor(TextArea):
             if line is not None:
                 self.scroll_cursor_visible(center=True)
             self.refresh()
+
+    def gutter_marker_for_line(self, line_1based: int) -> Text | None:
+        """Return a Rich Text marker for the gutter of `line_1based`, or None.
+
+        Used by the gutter renderer and by tests. Picks theme accent colors
+        for breakpoint (error) and current-exec (warning).
+        """
+        is_bp = line_1based in self._breakpoints
+        is_cur = self._current_exec_line == line_1based
+        if not (is_bp or is_cur):
+            return None
+        if is_cur:
+            return Text("▶", style="bold yellow")
+        return Text("●", style="red")
+
+    def render_line(self, y):  # type: ignore[override]
+        strip = super().render_line(y)
+        try:
+            line_index = self.scroll_offset.y + y
+        except Exception:
+            return strip
+        marker = self.gutter_marker_for_line(line_index + 1)
+        if marker is None:
+            return strip
+        from textual.strip import Strip
+        from rich.segment import Segment
+        segs = list(strip)
+        if not segs:
+            return strip
+        first = segs[0]
+        if first.text:
+            new_first = Segment(marker.plain + first.text[len(marker.plain):], first.style)
+            segs[0] = new_first
+        return Strip(segs, strip.cell_length)
 
     def apply_config(self, config: EditorConfig) -> None:
         self.theme = config.theme_name
