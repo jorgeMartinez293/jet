@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from rich.text import Text
 from textual import events
+from textual.message import Message
 from textual.widgets import TextArea
 
 from . import brackets, indent
@@ -16,6 +18,33 @@ from .theme import THEMES
 
 class JetEditor(TextArea):
     """Code editor widget. One instance per open buffer/tab."""
+
+    class BreakpointToggleRequested(Message):
+        def __init__(self, editor: "JetEditor", line: int) -> None:
+            super().__init__()
+            self.editor = editor
+            self.line = line
+
+    on_breakpoint_toggle_request: Any = None  # set by App; test hook
+
+    def request_breakpoint_toggle(self, line_1based: int) -> None:
+        if callable(self.on_breakpoint_toggle_request):
+            self.on_breakpoint_toggle_request(line_1based)
+        else:
+            self.post_message(self.BreakpointToggleRequested(self, line_1based))
+
+    async def _on_click(self, event) -> None:  # type: ignore[override]
+        meta = getattr(event, "meta", False) or getattr(event, "alt", False)
+        if meta:
+            try:
+                line0, _ = self.get_target_document_location(event)
+            except Exception:
+                await super()._on_click(event)
+                return
+            self.request_breakpoint_toggle(line0 + 1)
+            event.stop()
+            return
+        await super()._on_click(event)
 
     DEFAULT_CSS = """
     JetEditor {

@@ -51,3 +51,13 @@ def test_gutter_current_line_marker():
 def test_gutter_returns_none_for_unmarked_line():
     ed = JetEditor(text="a=1\nb=2\n")
     assert ed.gutter_marker_for_line(99) is None
+
+
+def test_option_click_callback_invokes_handler():
+    from unittest.mock import Mock
+    ed = JetEditor(text="a=1\nb=2\nc=3\n")
+    handler = Mock()
+    ed.on_breakpoint_toggle_request = handler  # type: ignore[attr-defined]
+
+    ed.request_breakpoint_toggle(line_1based=2)
+    handler.assert_called_once_with(2)
