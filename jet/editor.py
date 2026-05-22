@@ -60,6 +60,28 @@ class JetEditor(TextArea):
         self.path: Path | None = path
         self._original_text: str = text
         self._use_tabs: bool = cfg.use_tabs
+        self._breakpoints: frozenset[int] = frozenset()
+        self._current_exec_line: int | None = None
+
+    @property
+    def breakpoints(self) -> frozenset[int]:
+        return self._breakpoints
+
+    def set_breakpoints(self, lines: set[int] | frozenset[int]) -> None:
+        self._breakpoints = frozenset(lines)
+        if self.is_mounted:
+            self.refresh()
+
+    @property
+    def current_exec_line(self) -> int | None:
+        return self._current_exec_line
+
+    def set_current_exec_line(self, line: int | None) -> None:
+        self._current_exec_line = line
+        if self.is_mounted:
+            if line is not None:
+                self.scroll_cursor_visible(center=True)
+            self.refresh()
 
     def apply_config(self, config: EditorConfig) -> None:
         self.theme = config.theme_name
