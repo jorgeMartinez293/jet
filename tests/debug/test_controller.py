@@ -89,3 +89,22 @@ async def test_controller_pauses_on_breakpoint():
         assert ctrl.state == DebugState.EXITED
 
     await _drain_procs()
+
+
+@pytest.mark.asyncio
+async def test_controller_stop_terminates_session():
+    ctrl = DebugController(on_event=lambda *_a: None)
+    ctrl.toggle_breakpoint(FIXTURE, 3)
+
+    with patch("jet.debug.controller.terminal.spawn", side_effect=_make_fake_spawn()):
+        await ctrl.start(target=FIXTURE, terminal_template="{cmd}")
+        for _ in range(50):
+            if ctrl.state == DebugState.PAUSED:
+                break
+            await asyncio.sleep(0.1)
+        assert ctrl.state == DebugState.PAUSED
+
+        await ctrl.stop()
+        assert ctrl.state in (DebugState.EXITED, DebugState.IDLE)
+
+    await _drain_procs()
