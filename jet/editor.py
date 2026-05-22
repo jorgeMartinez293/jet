@@ -138,13 +138,23 @@ class JetEditor(TextArea):
             return strip
         from textual.strip import Strip
         from rich.segment import Segment
+        from rich.style import Style
         segs = list(strip)
         if not segs:
             return strip
         first = segs[0]
-        if first.text:
-            new_first = Segment(marker.plain + first.text[len(marker.plain):], first.style)
-            segs[0] = new_first
+        if not first.text:
+            return strip
+        marker_style = Style.parse(str(marker.style)) if marker.style else None
+        if self.show_line_numbers:
+            # Recolor existing line-number digits in the marker color; leave
+            # the text content alone so digits remain readable.
+            segs[0] = Segment(first.text, marker_style)
+        else:
+            # No line numbers: replace the first cell with the marker glyph.
+            glyph = marker.plain
+            tail = first.text[len(glyph):] if len(first.text) > len(glyph) else ""
+            segs[0] = Segment(glyph + tail, marker_style)
         return Strip(segs, strip.cell_length)
 
     def apply_config(self, config: EditorConfig) -> None:

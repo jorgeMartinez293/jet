@@ -183,9 +183,12 @@ class JetApp(App):
         if ed is None:
             self.notify("No active editor", severity="warning")
             return
-        if ed.path is None or ed.path.suffix != ".py":
-            buf_text = ed.text if ed.path is None or ed.modified else None
-            target = ed.path or self.workspace / "untitled.py"
+        if ed.path is not None and ed.path.suffix != ".py":
+            self.notify("Debugger only supports .py files", severity="warning")
+            return
+        if ed.path is None:
+            buf_text = ed.text
+            target = self.workspace / "untitled.py"
         else:
             buf_text = ed.text if ed.modified else None
             target = ed.path
