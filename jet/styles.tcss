@@ -1,0 +1,69 @@
+/* Minimal, transparent. Thin white lines. No filled panels. */
+
+Screen {
+    layout: vertical;
+    background: transparent;
+    color: #e6e6e6;
+}
+
+#workspace {
+    layout: horizontal;
+    height: 1fr;
+    background: transparent;
+}
+
+#tabs-area {
+    width: 1fr;
+    height: 1fr;
+    background: transparent;
+}
+
+/* Tabbed content: kill filled bars, leave thin underline only. */
+TabbedContent {
+    height: 1fr;
+    background: transparent;
+}
+
+TabbedContent > #--content-tab-container,
+TabbedContent Tabs {
+    background: transparent;
+    color: #9aa5b1;
+}
+
+TabbedContent Tabs Tab {
+    background: transparent;
+    color: #7f8a99;
+    padding: 0 2;
+}
+
+TabbedContent Tabs Tab:hover {
+    color: #e6e6e6;
+}
+
+TabbedContent Tabs Tab.-active {
+    color: #ffffff;
+    text-style: none;
+    background: transparent;
+}
+
+TabbedContent Tabs > Underline {
+    background: transparent;
+    color: #ffffff;
+}
+
+ContentSwitcher {
+    background: transparent;
+}
+
+TabPane {
+    background: transparent;
+    padding: 0;
+}
+
+#statusbar {
+    dock: bottom;
+    height: 1;
+    background: transparent;
+    color: #7f8a99;
+    padding: 0 2;
+}
