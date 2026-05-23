@@ -114,3 +114,26 @@ async def test_infinite_scroll_loads_more(tmp_path: Path, monkeypatch) -> None:
         await pilot.pause()
         assert w.grid is not None
         assert len(w.grid.rows) > 3
+
+
+from jet.git_history.popup import CommitDetailPopup
+from jet.git_history.repo import Commit, CommitStats
+
+
+def test_popup_renders_stats_and_truncated_subject() -> None:
+    c = Commit(
+        sha="a" * 40,
+        short="a" * 7,
+        parents=(),
+        author="x",
+        timestamp=0,
+        subject="this is a very long subject line that should be truncated nicely",
+    )
+    popup = CommitDetailPopup()
+    popup.set_commit(c, stats=CommitStats(1, 12, 3, ()))
+    rendered = popup.render()
+    text = rendered.plain if hasattr(rendered, "plain") else str(rendered)
+    assert "+12 / -3" in text
+    assert "this is a very long subject" in text
+    # Truncated to 30 chars with ellipsis somewhere.
+    assert "…" in text or "..." in text
