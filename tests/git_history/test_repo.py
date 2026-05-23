@@ -101,3 +101,19 @@ def test_refs_local_remote_tag(tmp_path: Path) -> None:
 def test_refs_in_empty_repo(tmp_path: Path) -> None:
     repo_path = init_repo(tmp_path / "r")
     assert Repo(repo_path).refs() == []
+
+
+def test_log_parses_merge_parents(tmp_path: Path) -> None:
+    repo_path = init_repo(tmp_path / "r")
+    commit(repo_path, "base")
+    branch(repo_path, "feature")
+    commit(repo_path, "feat-1", file="feat.txt")
+    checkout(repo_path, "main")
+    commit(repo_path, "main-1", file="main.txt")
+    merge(repo_path, "feature")
+    commits = Repo(repo_path).log(limit=10)
+    merge_commit = commits[0]  # newest = the merge
+    assert len(merge_commit.parents) == 2
+    other_parent_subjects = {c.subject for c in commits[1:]}
+    assert "feat-1" in other_parent_subjects
+    assert "main-1" in other_parent_subjects
