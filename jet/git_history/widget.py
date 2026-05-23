@@ -13,6 +13,7 @@ from textual.reactive import reactive
 from textual.scroll_view import ScrollView
 from textual.strip import Strip
 
+from .branch_header import BranchHeader
 from .layout import GraphGrid, GraphRow, build_grid
 from .repo import Repo
 
@@ -67,6 +68,9 @@ class GitHistoryWidget(ScrollView):
         self._commits_loaded = 0
         self._all_commits: list = []
 
+    def compose(self):
+        yield BranchHeader(id="git-branch-header")
+
     def on_mount(self) -> None:
         self._load()
 
@@ -95,6 +99,13 @@ class GitHistoryWidget(ScrollView):
         cols = max(1, self.grid.num_lanes * 2 - 1)
         self.virtual_size = Size(cols, rows)
         self.styles.width = max(12, min(60, self.grid.num_lanes * 2 + 4))
+        from textual.css.query import NoMatches
+        try:
+            header = self.query_one(BranchHeader)
+        except NoMatches:
+            header = None
+        if header is not None:
+            header.grid = self.grid
 
     def action_refresh_repo(self) -> None:
         self.repo.refresh()

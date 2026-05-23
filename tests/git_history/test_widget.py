@@ -137,3 +137,16 @@ def test_popup_renders_stats_and_truncated_subject() -> None:
     assert "this is a very long subject" in text
     # Truncated to 30 chars with ellipsis somewhere.
     assert "…" in text or "..." in text
+
+
+@pytest.mark.asyncio
+async def test_branch_header_shows_main_label(tmp_path: Path) -> None:
+    repo = init_repo(tmp_path / "r")
+    commit(repo, "init")
+    commit(repo, "second")
+    app = _Host(repo)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        from jet.git_history.branch_header import BranchHeader
+        header = app.query_one(BranchHeader)
+        assert "main" in header.render_to_text()
