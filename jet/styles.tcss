@@ -4,6 +4,7 @@ Screen {
     layout: vertical;
     background: transparent;
     color: #e6e6e6;
+    layers: overlay;
 }
 
 #workspace {
@@ -80,4 +81,18 @@ TabPane {
     text-align: right;
     padding: 0 2;
     display: none;
+}
+
+/* Git history sidebar */
+#sidebar-git {
+    background: transparent;
+    background-tint: transparent;
+}
+
+#commit-popup {
+    layer: overlay;
+}
+
+BranchHeader {
+    color: #7f8a99;
 }
