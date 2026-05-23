@@ -60,6 +60,10 @@ def build_grid(
 
     raw_rows, lane_to_branch = _assign_lanes(commits, refs, main_branch_name, head_sha)
 
+    if dirty and raw_rows:
+        head_raw = next((r for r in raw_rows if r.commit and r.commit.sha == head_sha), raw_rows[0])
+        raw_rows = [_RawRow(commit=None, lane=head_raw.lane), *raw_rows]
+
     # Centring: trivially zero-offset for a single lane.
     main_lane_raw = _lane_of_branch(lane_to_branch, main_branch_name)
     if main_lane_raw is None:
@@ -218,6 +222,7 @@ def _branch_label_for_row(
 ) -> str | None:
     if branch_name is None or raw.commit is None:
         return None
-    if any(prev.lane == raw.lane for prev in raw_rows[:idx]):
+    # Only real commit rows (commit is not None) count as prior occupants.
+    if any(prev.commit is not None and prev.lane == raw.lane for prev in raw_rows[:idx]):
         return None
     return branch_name
