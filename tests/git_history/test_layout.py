@@ -141,3 +141,31 @@ def test_sha_to_row_indexes_synthetic_dirty_correctly() -> None:
     refs = [Ref(name="main", kind="local", target_sha=c.sha)]
     grid = build_grid([c], refs, head_sha=c.sha, head_branch="main", dirty=True)
     assert grid.sha_to_row[c.sha] == 1
+
+
+def test_merge_pre_reserves_parent_lane_before_parent_commit() -> None:
+    # History (newest first):
+    #   m  — merge with parents (p_main, p_feat)
+    #   x  — unrelated commit on its own lane that arrives AFTER the merge but
+    #         BEFORE p_feat. Without pre-reservation of p_feat's lane,
+    #         allocator could place x on the lane that p_feat ought to occupy.
+    #   p_feat — feature parent
+    #   p_main — main parent (also parent of x)
+    p_main = _c("p_main", ())
+    p_feat = _c("p_feat", ("p_main",))
+    x = _c("x", ("p_main",))
+    m = _c("m", ("p_main", "p_feat"))
+    refs = [Ref(name="main", kind="local", target_sha=m.sha)]
+    # Order newest-first: m, x, p_feat, p_main
+    grid = build_grid(
+        [m, x, p_feat, p_main],
+        refs,
+        head_sha=m.sha,
+        head_branch="main",
+        dirty=False,
+    )
+    # After the merge, the lane for p_feat must already be reserved. So when
+    # x arrives, it must be on a DIFFERENT lane than the one reserved for p_feat.
+    lane_of_x = next(r.lane for r in grid.rows if r.commit and r.commit.sha == x.sha)
+    lane_of_p_feat = next(r.lane for r in grid.rows if r.commit and r.commit.sha == p_feat.sha)
+    assert lane_of_x != lane_of_p_feat

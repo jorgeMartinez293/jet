@@ -180,7 +180,16 @@ def _assign_lanes(
 
         if commit.parents:
             active_lanes[lane] = commit.parents[0]
-            # Task 6 extends this for additional parents.
+            for extra_parent in commit.parents[1:]:
+                # Reuse if another lane already expects this sha; else allocate new.
+                reused = next(
+                    (l for l, s in active_lanes.items() if s == extra_parent and l != lane),
+                    None,
+                )
+                if reused is None:
+                    new_lane = _open_new_lane(active_lanes, new_lane_counter)
+                    new_lane_counter += 1
+                    active_lanes[new_lane] = extra_parent
         else:
             active_lanes.pop(lane, None)
 
