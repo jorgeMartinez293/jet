@@ -185,3 +185,29 @@ def test_merge_pre_reserves_parent_lane_before_parent_commit() -> None:
         f"which is higher than x's lane ({lane_of_x}); "
         f"main_lane={main_lane}"
     )
+
+
+def test_through_lane_draws_vertical_connector() -> None:
+    # A feature commit sits between two main commits, so the main lane must
+    # render a vertical connector on the feature row to stay connected.
+    m2 = _c("m2", ("m1", "f1"))
+    f1 = _c("f1", ("m1",))
+    m1 = _c("m1", ())
+    refs = [Ref(name="main", kind="local", target_sha=m2.sha)]
+    grid = build_grid([m2, f1, m1], refs, head_sha=m2.sha, head_branch="main", dirty=False)
+    main = grid.main_lane
+    # Row 1 (f1) is on a side lane; the main lane cell must be a vertical line.
+    assert grid.rows[1].lane != main
+    assert grid.rows[1].cells[main].glyph == "│"
+    assert grid.rows[1].cells[main].style == "guide"
+
+
+def test_no_spurious_connectors_in_linear_history() -> None:
+    c3 = _c("c3", ("c2",))
+    c2 = _c("c2", ("c1",))
+    c1 = _c("c1", ())
+    refs = [Ref(name="main", kind="local", target_sha=c3.sha)]
+    grid = build_grid([c3, c2, c1], refs, head_sha=c3.sha, head_branch="main", dirty=False)
+    # Single lane: every row's only cell is the dot, never a connector.
+    for row in grid.rows:
+        assert "│" not in {cell.glyph for cell in row.cells}

@@ -58,7 +58,7 @@ class GitHistoryWidget(ScrollView):
         "head": Style(color="#f9e2af", bold=True),
         "tagged": Style(color="#94e2d5"),
         "dirty": Style(color="#f9e2af"),
-        "guide": Style(color="#2a2f3a"),
+        "guide": Style(color="#585b70"),
     }
 
     def __init__(self, workspace: Path, *, id: str | None = None) -> None:

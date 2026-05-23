@@ -74,10 +74,12 @@ def build_grid(
     centre = half
     shift = centre - main_lane_raw
 
-    rows: list[GraphRow] = []
-    sha_to_row: dict[str, int] = {}
     shifted_lane_to_branch = {lane + shift: name for lane, name in lane_to_branch.items()}
 
+    # First pass: final lane + glyph kind per row, plus a sha → row index map.
+    lanes: list[int] = []
+    kinds: list[GlyphKind] = []
+    sha_to_row: dict[str, int] = {}
     for idx, raw in enumerate(raw_rows):
         new_lane = raw.lane + shift
         commit = raw.commit
@@ -89,21 +91,31 @@ def build_grid(
             kind = "tagged"
         else:
             kind = "normal"
-        cells = _row_cells(num_lanes, new_lane, kind)
+        lanes.append(new_lane)
+        kinds.append(kind)
+        if commit is not None:
+            sha_to_row[commit.sha] = idx
+
+    through = _through_lanes(raw_rows, lanes, sha_to_row)
+
+    # Second pass: build the rendered rows.
+    rows: list[GraphRow] = []
+    for idx, raw in enumerate(raw_rows):
+        new_lane = lanes[idx]
+        commit = raw.commit
+        cells = _row_cells(num_lanes, new_lane, kinds[idx], through[idx])
         commit_refs = tuple(refs_by_sha.get(commit.sha, [])) if commit else ()
         branch_label = _branch_label_for_row(idx, raw_rows, raw, shifted_lane_to_branch.get(new_lane))
         rows.append(
             GraphRow(
                 commit=commit,
                 lane=new_lane,
-                glyph_kind=kind,
+                glyph_kind=kinds[idx],
                 cells=cells,
                 refs=commit_refs,
                 branch_label=branch_label,
             )
         )
-        if commit is not None:
-            sha_to_row[commit.sha] = idx
 
     return GraphGrid(
         rows=tuple(rows),
@@ -211,13 +223,54 @@ def _open_new_lane(active: dict[int, str], counter: int) -> int:
     raise RuntimeError("no lane slot available")
 
 
-def _row_cells(num_lanes: int, dot_lane: int, kind: GlyphKind) -> tuple[GraphCell, ...]:
+def _through_lanes(
+    raw_rows: list[_RawRow],
+    lanes: list[int],
+    sha_to_row: dict[str, int],
+) -> list[set[int]]:
+    """Lanes with an edge passing vertically through each row.
+
+    For every commit→parent edge, the destination lane stays open on the rows
+    strictly between the child and its parent, so it renders as a `│`.
+    """
+    through: list[set[int]] = [set() for _ in raw_rows]
+    for idx, raw in enumerate(raw_rows):
+        commit = raw.commit
+        if commit is None:
+            continue
+        child_lane = lanes[idx]
+        for parent in commit.parents:
+            pr = sha_to_row.get(parent)
+            if pr is None or pr <= idx:
+                continue
+            parent_lane = lanes[pr]
+            # Straight edges stay in their own lane; diagonals open the parent's.
+            line_lane = child_lane if child_lane == parent_lane else parent_lane
+            for rr in range(idx + 1, pr):
+                through[rr].add(line_lane)
+    # Synthetic dirty row (commit is None) mirrors the lanes continuing below it.
+    if raw_rows and raw_rows[0].commit is None and len(raw_rows) > 1:
+        below = set(through[1])
+        below.add(lanes[1])
+        below.discard(lanes[0])
+        through[0] |= below
+    return through
+
+
+def _row_cells(
+    num_lanes: int,
+    dot_lane: int,
+    kind: GlyphKind,
+    through_lanes: set[int],
+) -> tuple[GraphCell, ...]:
     glyph = {"head": "★", "tagged": "◆", "dirty": "✱", "normal": "●"}[kind]
     style = {"head": "head", "tagged": "tagged", "dirty": "dirty", "normal": "branch"}[kind]
     cells: list[GraphCell] = []
     for lane in range(num_lanes):
         if lane == dot_lane:
             cells.append(GraphCell(glyph=glyph, style=style))
+        elif lane in through_lanes:
+            cells.append(GraphCell(glyph="│", style="guide"))
         else:
             cells.append(GraphCell(glyph=" ", style="guide"))
     return tuple(cells)
