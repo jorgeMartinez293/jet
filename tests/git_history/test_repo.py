@@ -50,3 +50,54 @@ def test_head_detached_returns_none_branch(tmp_path: Path) -> None:
     sha, branch_name = Repo(repo_path).head()
     assert sha == first
     assert branch_name is None
+
+
+def test_log_returns_commits_newest_first(tmp_path: Path) -> None:
+    repo_path = init_repo(tmp_path / "r")
+    commit(repo_path, "first")
+    commit(repo_path, "second")
+    commit(repo_path, "third")
+    commits = Repo(repo_path).log(limit=10)
+    assert [c.subject for c in commits] == ["third", "second", "first"]
+    assert all(len(c.sha) == 40 and len(c.short) == 7 for c in commits)
+    assert commits[0].parents == (commits[1].sha,)
+    assert commits[2].parents == ()
+
+
+def test_log_respects_limit_and_skip(tmp_path: Path) -> None:
+    repo_path = init_repo(tmp_path / "r")
+    for i in range(5):
+        commit(repo_path, f"c{i}")
+    page1 = Repo(repo_path).log(limit=2)
+    page2 = Repo(repo_path).log(limit=2, skip=2)
+    assert [c.subject for c in page1] == ["c4", "c3"]
+    assert [c.subject for c in page2] == ["c2", "c1"]
+
+
+def test_log_includes_all_branches(tmp_path: Path) -> None:
+    repo_path = init_repo(tmp_path / "r")
+    commit(repo_path, "main-1")
+    branch(repo_path, "feature")
+    commit(repo_path, "feat-1")
+    checkout(repo_path, "main")
+    commit(repo_path, "main-2")
+    subjects = {c.subject for c in Repo(repo_path).log(limit=10)}
+    assert subjects == {"main-1", "feat-1", "main-2"}
+
+
+def test_refs_local_remote_tag(tmp_path: Path) -> None:
+    repo_path = init_repo(tmp_path / "r")
+    commit(repo_path, "init")
+    branch(repo_path, "feature")
+    checkout(repo_path, "main")
+    tag(repo_path, "v0.1")
+    refs = Repo(repo_path).refs()
+    kinds = {(r.name, r.kind) for r in refs}
+    assert ("main", "local") in kinds
+    assert ("feature", "local") in kinds
+    assert ("v0.1", "tag") in kinds
+
+
+def test_refs_in_empty_repo(tmp_path: Path) -> None:
+    repo_path = init_repo(tmp_path / "r")
+    assert Repo(repo_path).refs() == []

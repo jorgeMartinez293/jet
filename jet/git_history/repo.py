@@ -78,6 +78,74 @@ class Repo:
         except _GitError:
             return sha, None
 
+    _LOG_SEP = "\x1f"  # ASCII unit separator — never appears in author/subject
+
+    def log(self, limit: int = 500, skip: int = 0) -> list[Commit]:
+        try:
+            out = self._run(
+                "log",
+                "--all",
+                f"--pretty=format:%H{self._LOG_SEP}%h{self._LOG_SEP}%P{self._LOG_SEP}%an <%ae>{self._LOG_SEP}%at{self._LOG_SEP}%s",
+                f"-n{limit}",
+                f"--skip={skip}",
+            )
+        except _GitError:
+            return []
+        result: list[Commit] = []
+        for line in out.splitlines():
+            if not line:
+                continue
+            parts = line.split(self._LOG_SEP)
+            if len(parts) != 6:
+                continue
+            sha, short, parents_field, author, ts, subject = parts
+            parents = tuple(p for p in parents_field.split() if p)
+            result.append(
+                Commit(
+                    sha=sha,
+                    short=short,
+                    parents=parents,
+                    author=author,
+                    timestamp=int(ts),
+                    subject=subject,
+                )
+            )
+        return result
+
+    def refs(self) -> list[Ref]:
+        try:
+            out = self._run(
+                "for-each-ref",
+                f"--format=%(refname){self._LOG_SEP}%(objectname)",
+                "refs/heads",
+                "refs/remotes",
+                "refs/tags",
+            )
+        except _GitError:
+            return []
+        result: list[Ref] = []
+        for line in out.splitlines():
+            if not line:
+                continue
+            try:
+                refname, target = line.split(self._LOG_SEP)
+            except ValueError:
+                continue
+            kind: Literal["local", "remote", "tag"]
+            if refname.startswith("refs/heads/"):
+                kind = "local"
+                name = refname[len("refs/heads/"):]
+            elif refname.startswith("refs/remotes/"):
+                kind = "remote"
+                name = refname[len("refs/remotes/"):]
+            elif refname.startswith("refs/tags/"):
+                kind = "tag"
+                name = refname[len("refs/tags/"):]
+            else:
+                continue
+            result.append(Ref(name=name, kind=kind, target_sha=target))
+        return result
+
 
 class _GitError(RuntimeError):
     """Internal — `git` returned non-zero."""
