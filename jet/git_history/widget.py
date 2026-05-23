@@ -80,7 +80,7 @@ class GitHistoryWidget(ScrollView):
         if self.cursor_sha is None and head_sha:
             self.cursor_sha = head_sha
         rows = len(self.grid.rows)
-        cols = self.grid.num_lanes * 2 + 1
+        cols = max(1, self.grid.num_lanes * 2 - 1)
         self.virtual_size = Size(cols, rows)
         self.styles.width = max(12, min(60, self.grid.num_lanes * 2 + 4))
 
