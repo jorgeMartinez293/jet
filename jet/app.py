@@ -318,6 +318,9 @@ class JetApp(App):
         ed = self._active_editor()
         if ed is None:
             return
+        if ed.read_only:
+            self.notify("Buffer is read-only")
+            return
         if ed.path is None:
             if not await self._prompt_save_as(ed):
                 return

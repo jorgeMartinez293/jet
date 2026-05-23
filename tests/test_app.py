@@ -135,3 +135,19 @@ async def test_sidebar_cycle_tree_settings(tmp_path):
         await pilot.press("ctrl+b")
         assert app.query_one("#sidebar-tree").display is True
         assert app.query_one("#sidebar-settings").display is False
+
+
+@pytest.mark.asyncio
+async def test_editor_read_only_blocks_insertion(tmp_path: Path):
+    f = tmp_path / "x.py"
+    f.write_text("hello\n")
+    app = JetApp(paths=[f])
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        ed = app._active_editor()
+        assert ed is not None
+        ed.read_only = True
+        ed.focus()
+        await pilot.press("a")
+        await pilot.pause()
+        assert ed.text == "hello\n"

@@ -41,6 +41,7 @@ class JetEditor(TextArea):
         path: Path | None = None,
         language: str | None = None,
         config: EditorConfig | None = None,
+        read_only: bool = False,
         **kwargs,
     ) -> None:
         cfg = config or EditorConfig()
@@ -60,6 +61,7 @@ class JetEditor(TextArea):
         self.indent_width = cfg.indent_width
         self.path: Path | None = path
         self._original_text: str = text
+        self.read_only = read_only
 
     def apply_config(self, config: EditorConfig) -> None:
         self.theme = config.theme_name
