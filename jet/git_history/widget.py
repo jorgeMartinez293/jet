@@ -16,6 +16,10 @@ from textual.strip import Strip
 from .layout import GraphGrid, GraphRow, build_grid
 from .repo import Repo
 
+_INITIAL_LIMIT = 500
+_PAGE_SIZE = 500
+_LOAD_AHEAD_ROWS = 5
+
 
 class GitHistoryWidget(ScrollView):
     """Read-only commit-graph sidebar."""
@@ -61,6 +65,7 @@ class GitHistoryWidget(ScrollView):
         self.workspace = Path(workspace)
         self.repo = Repo(self.workspace)
         self._commits_loaded = 0
+        self._all_commits: list = []
 
     def on_mount(self) -> None:
         self._load()
@@ -71,12 +76,19 @@ class GitHistoryWidget(ScrollView):
         if not self.repo.is_git_repo():
             self.grid = None
             return
-        commits = self.repo.log(limit=500)
+        commits = self.repo.log(limit=_INITIAL_LIMIT)
+        self._all_commits = commits
         self._commits_loaded = len(commits)
+        self._rebuild_grid()
+
+    def _rebuild_grid(self) -> None:
+        if not self._all_commits:
+            self.grid = None
+            return
         refs = self.repo.refs()
-        head_sha, head_branch = self.repo.head() if commits else ("", None)
-        dirty = self.repo.is_dirty() if commits else False
-        self.grid = build_grid(commits, refs, head_sha, head_branch, dirty)
+        head_sha, head_branch = self.repo.head()
+        dirty = self.repo.is_dirty()
+        self.grid = build_grid(self._all_commits, refs, head_sha, head_branch, dirty)
         if self.cursor_sha is None and head_sha:
             self.cursor_sha = head_sha
         rows = len(self.grid.rows)
@@ -104,19 +116,40 @@ class GitHistoryWidget(ScrollView):
             for r in self.grid.rows:
                 if r.commit is not None:
                     self._update_cursor(r)
-                    return
+                    break
+            self._maybe_load_more()
             return
         current_lane = self.grid.rows[idx].lane
+        moved = False
         for j in range(idx + 1, len(self.grid.rows)):
             row = self.grid.rows[j]
             if row.commit is not None and row.lane == current_lane:
                 self._update_cursor(row)
+                moved = True
+                break
+        if not moved:
+            for j in range(idx + 1, len(self.grid.rows)):
+                row = self.grid.rows[j]
+                if row.commit is not None:
+                    self._update_cursor(row)
+                    break
+        self._maybe_load_more()
+
+    def _maybe_load_more(self) -> None:
+        if self.grid is None:
+            return
+        idx = self._current_row_idx()
+        if idx is None:
+            return
+        if idx >= len(self.grid.rows) - _LOAD_AHEAD_ROWS:
+            more = self.repo.log(limit=_PAGE_SIZE, skip=len(self._all_commits))
+            if not more:
                 return
-        for j in range(idx + 1, len(self.grid.rows)):
-            row = self.grid.rows[j]
-            if row.commit is not None:
-                self._update_cursor(row)
-                return
+            self._all_commits = self._all_commits + more
+            old_cursor = self.cursor_sha
+            self._rebuild_grid()
+            self.cursor_sha = old_cursor
+            self.refresh()
 
     def action_cursor_up(self) -> None:
         if self.grid is None:

@@ -92,3 +92,25 @@ async def test_commit_focused_message_posted_on_move(tmp_path: Path) -> None:
         w.action_cursor_down()
         await pilot.pause()
         assert received, "expected a CommitFocused message"
+
+
+@pytest.mark.asyncio
+async def test_infinite_scroll_loads_more(tmp_path: Path, monkeypatch) -> None:
+    repo = init_repo(tmp_path / "r")
+    for i in range(8):
+        commit(repo, f"c{i}")
+    # Patch initial limit to 3 so we can exercise pagination.
+    import jet.git_history.widget as widget_mod
+    monkeypatch.setattr(widget_mod, "_INITIAL_LIMIT", 3)
+    monkeypatch.setattr(widget_mod, "_PAGE_SIZE", 3)
+    app = _Host(repo)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = app.query_one(GitHistoryWidget)
+        assert w.grid is not None and len(w.grid.rows) == 3
+        # Step cursor down past the loaded slice.
+        for _ in range(5):
+            w.action_cursor_down()
+        await pilot.pause()
+        assert w.grid is not None
+        assert len(w.grid.rows) > 3
