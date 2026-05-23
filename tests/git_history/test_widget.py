@@ -150,3 +150,22 @@ async def test_branch_header_shows_main_label(tmp_path: Path) -> None:
         from jet.git_history.branch_header import BranchHeader
         header = app.query_one(BranchHeader)
         assert "main" in header.render_to_text()
+
+
+@pytest.mark.asyncio
+async def test_mouse_click_selects_commit(tmp_path: Path) -> None:
+    import types
+    repo = init_repo(tmp_path / "r")
+    commit(repo, "first")
+    commit(repo, "second")
+    commit(repo, "third")
+    app = _Host(repo)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        w = app.query_one(GitHistoryWidget)
+        assert w.grid is not None
+        target_sha = w.grid.rows[2].commit.sha  # oldest commit
+        # Click at y=2 (third row); x within the lane.
+        w.on_click(types.SimpleNamespace(x=0, y=2))
+        await pilot.pause()
+        assert w.cursor_sha == target_sha

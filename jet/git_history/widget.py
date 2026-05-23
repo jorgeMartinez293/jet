@@ -107,6 +107,18 @@ class GitHistoryWidget(ScrollView):
         if header is not None:
             header.grid = self.grid
 
+    def on_click(self, event) -> None:
+        if self.grid is None:
+            return
+        _, scroll_y = self.scroll_offset
+        row_idx = event.y + scroll_y
+        if not (0 <= row_idx < len(self.grid.rows)):
+            return
+        row = self.grid.rows[row_idx]
+        if row.commit is None:
+            return
+        self._update_cursor(row)
+
     def action_refresh_repo(self) -> None:
         self.repo.refresh()
         self._load()
