@@ -219,3 +219,29 @@ async def test_shift_tab_opens_commit_buffer(tmp_path: Path):
         # A new tab with a `<commit:` title should now exist.
         titles = [str(tabs.get_tab(p.id).label) for p in panes if p.id]
         assert any("commit:" in t for t in titles)
+
+
+@pytest.mark.asyncio
+async def test_popup_visible_only_while_git_focused(tmp_path: Path):
+    from jet.git_history.widget import GitHistoryWidget
+    from jet.git_history.popup import CommitDetailPopup
+    from tests.git_history.fixtures.make_repo import commit, init_repo
+    repo_path = init_repo(tmp_path / "r")
+    commit(repo_path, "init")
+    commit(repo_path, "second")
+    f = repo_path / "file.txt"
+    app = JetApp(paths=[f])
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+b")  # show git sidebar
+        git_w = app.query_one(GitHistoryWidget)
+        git_w.focus()
+        await pilot.pause()
+        popup = app.query_one(CommitDetailPopup)
+        assert popup.display is True
+        # Focus the editor — popup should hide.
+        ed = app._active_editor()
+        assert ed is not None
+        ed.focus()
+        await pilot.pause()
+        assert popup.display is False

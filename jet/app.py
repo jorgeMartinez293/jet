@@ -636,6 +636,59 @@ class JetApp(App):
         tabs.active = tab_id
         editor.focus()
 
+    # ------------------------------------------------------------------ git popup
+
+    def on_descendant_focus(self, event) -> None:  # type: ignore[override]
+        self._sync_git_popup()
+
+    def on_descendant_blur(self, event) -> None:  # type: ignore[override]
+        self._sync_git_popup()
+
+    @on(GitHistoryWidget.CommitFocused)
+    def _on_commit_focused(self, event: GitHistoryWidget.CommitFocused) -> None:
+        git = self._visible_git_sidebar()
+        if git is None or event.sha is None:
+            return
+        popup = self.query_one("#commit-popup", CommitDetailPopup)
+        commit = next(
+            (c for c in git._all_commits if c.sha == event.sha),
+            None,
+        )
+        stats = git.repo.stats(event.sha) if commit is not None else None
+        popup.set_commit(commit, stats)
+        self._position_popup(event.row)
+        self._sync_git_popup()
+
+    def _position_popup(self, row: int) -> None:
+        popup = self.query_one("#commit-popup", CommitDetailPopup)
+        try:
+            git = self.query_one("#sidebar-git", GitHistoryWidget)
+        except Exception:
+            return
+        region = git.region
+        scroll_y = git.scroll_offset.y
+        header_height = 1
+        x = region.right + 1
+        y = region.y + header_height + (row - scroll_y)
+        screen_h = self.size.height
+        if y + 4 > screen_h:
+            y = max(0, y - 4)
+        popup.styles.offset = (x, y)
+
+    def _sync_git_popup(self) -> None:
+        try:
+            popup = self.query_one("#commit-popup", CommitDetailPopup)
+            git = self.query_one("#sidebar-git", GitHistoryWidget)
+        except Exception:
+            return
+        visible = bool(
+            git.display
+            and git.has_focus
+            and git.cursor_sha is not None
+            and git.grid is not None
+        )
+        popup.display = visible
+
     def action_sidebar_up(self) -> None:
         git = self._visible_git_sidebar()
         if git is not None and git.has_focus:
