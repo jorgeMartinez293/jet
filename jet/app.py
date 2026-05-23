@@ -16,6 +16,9 @@ from textual.widgets import DirectoryTree, Select, Static, TabbedContent, TabPan
 
 from .config import load_user_config, save_user_config
 from .editor import JetEditor
+from .git_history.commit_view import format_commit
+from .git_history.popup import CommitDetailPopup
+from .git_history.widget import GitHistoryWidget
 from .keymap import load_user_keymap, save_user_keymap
 from .runner import RunError, run_in_terminal
 from .screens import (
@@ -35,9 +38,10 @@ from .themes import APP_THEMES, CUSTOM_THEMES, SYNTAX_THEMES
 
 
 # Sidebars cycled by Ctrl+B. Order = cycle order.
-SIDEBAR_ORDER: tuple[str, ...] = ("tree", "settings")
+SIDEBAR_ORDER: tuple[str, ...] = ("tree", "git", "settings")
 SIDEBAR_SELECTORS: dict[str, str] = {
     "tree": "#sidebar-tree",
+    "git": "#sidebar-git",
     "settings": "#sidebar-settings",
 }
 
@@ -127,6 +131,7 @@ class JetApp(App):
         self._last_search: str | None = None
         self._editor_config: EditorConfig = load_user_config()
         self._active_sidebar: str = SIDEBAR_ORDER[0]
+        self._sidebar_order: tuple[str, ...] = SIDEBAR_ORDER
         self._moving_path: Path | None = None
         self._user_keymap: dict[str, str] = load_user_keymap()
 
@@ -135,10 +140,12 @@ class JetApp(App):
     def compose(self) -> ComposeResult:
         with Horizontal(id="workspace"):
             yield JetTree(str(self.workspace), id="sidebar-tree")
+            yield GitHistoryWidget(self.workspace, id="sidebar-git")
             yield SettingsPanel(self._editor_config, id="sidebar-settings")
             yield TabbedContent(id="tabs")
         yield _StatusBar(id="statusbar")
         yield _MatchCounter(id="match-counter")
+        yield CommitDetailPopup(id="commit-popup")
 
     async def on_mount(self) -> None:
         for t in CUSTOM_THEMES:
@@ -148,6 +155,12 @@ class JetApp(App):
         if self._user_keymap:
             self.set_keymap(self._user_keymap)
         self.query_one("#sidebar-settings").display = False
+        git_w = self.query_one("#sidebar-git", GitHistoryWidget)
+        if not git_w.repo.is_git_repo():
+            await git_w.remove()
+            self._sidebar_order = tuple(s for s in SIDEBAR_ORDER if s != "git")
+        else:
+            git_w.display = False
         if self._initial_paths:
             for p in self._initial_paths:
                 await self.open_file(p)
@@ -265,16 +278,24 @@ class JetApp(App):
 
     def action_cycle_sidebars(self) -> None:
         cur = self._active_sidebar
+        if cur not in self._sidebar_order:
+            cur = self._sidebar_order[0]
+            self._active_sidebar = cur
         cur_w = self.query_one(SIDEBAR_SELECTORS[cur])
         if not cur_w.display:
             cur_w.display = True
             self._refocus_editor()
             return
         cur_w.display = False
-        nxt = SIDEBAR_ORDER[(SIDEBAR_ORDER.index(cur) + 1) % len(SIDEBAR_ORDER)]
+        nxt = self._sidebar_order[
+            (self._sidebar_order.index(cur) + 1) % len(self._sidebar_order)
+        ]
         self.query_one(SIDEBAR_SELECTORS[nxt]).display = True
         self._active_sidebar = nxt
-        self._refocus_editor()
+        if nxt == "git":
+            self.query_one("#sidebar-git", GitHistoryWidget).focus()
+        else:
+            self._refocus_editor()
 
     @on(DirectoryTree.NodeExpanded)
     @on(DirectoryTree.NodeCollapsed)
@@ -577,7 +598,49 @@ class JetApp(App):
         panel = self.query_one("#sidebar-settings", SettingsPanel)
         return panel if panel.display else None
 
+    def _visible_git_sidebar(self) -> GitHistoryWidget | None:
+        try:
+            w = self.query_one("#sidebar-git", GitHistoryWidget)
+        except Exception:
+            return None
+        return w if w.display else None
+
+    @work
+    async def _open_commit_buffer(self, sha: str) -> None:
+        git = self._visible_git_sidebar()
+        if git is None:
+            return
+        short = sha[:7]
+        virtual_path = Path(f"<commit:{short}>")
+        tabs = self.query_one(TabbedContent)
+        for pane in tabs.query(TabPane):
+            try:
+                ed = pane.query_one(JetEditor)
+            except Exception:
+                continue
+            if ed.path == virtual_path:
+                tabs.active = pane.id or ""
+                ed.focus()
+                return
+        text = format_commit(git.repo, sha)
+        self._tab_counter += 1
+        tab_id = f"tab-{self._tab_counter}"
+        editor = JetEditor(
+            text=text,
+            path=virtual_path,
+            config=self._editor_config,
+            read_only=True,
+            id=f"ed-{self._tab_counter}",
+        )
+        await tabs.add_pane(TabPane(f"<commit:{short}>", editor, id=tab_id))
+        tabs.active = tab_id
+        editor.focus()
+
     def action_sidebar_up(self) -> None:
+        git = self._visible_git_sidebar()
+        if git is not None and git.has_focus:
+            git.action_cursor_up()
+            return
         tree = self._visible_sidebar_tree()
         if tree is not None:
             tree.action_cursor_up()
@@ -587,6 +650,10 @@ class JetApp(App):
             panel.move_up()
 
     def action_sidebar_down(self) -> None:
+        git = self._visible_git_sidebar()
+        if git is not None and git.has_focus:
+            git.action_cursor_down()
+            return
         tree = self._visible_sidebar_tree()
         if tree is not None:
             tree.action_cursor_down()
@@ -596,6 +663,10 @@ class JetApp(App):
             panel.move_down()
 
     async def action_sidebar_open(self) -> None:
+        git = self._visible_git_sidebar()
+        if git is not None and git.has_focus:
+            git.action_cursor_right()
+            return
         tree = self._visible_sidebar_tree()
         if tree is not None:
             node = tree.cursor_node
@@ -613,6 +684,10 @@ class JetApp(App):
             panel.cycle(+1)
 
     def action_sidebar_close(self) -> None:
+        git = self._visible_git_sidebar()
+        if git is not None and git.has_focus:
+            git.action_cursor_left()
+            return
         tree = self._visible_sidebar_tree()
         if tree is not None:
             node = tree.cursor_node
@@ -635,6 +710,10 @@ class JetApp(App):
         return True
 
     def action_move_toggle(self) -> None:
+        git = self._visible_git_sidebar()
+        if git is not None and git.has_focus and git.cursor_sha is not None:
+            self._open_commit_buffer(git.cursor_sha)
+            return
         tree = self._visible_sidebar_tree()
         if tree is None:
             return
