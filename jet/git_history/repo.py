@@ -173,8 +173,11 @@ class Repo:
                 continue
             ins_s, del_s, *path_parts = parts
             path = "\t".join(path_parts)
-            ins = 0 if ins_s == "-" else int(ins_s)
-            dels = 0 if del_s == "-" else int(del_s)
+            try:
+                ins = 0 if ins_s == "-" else int(ins_s)
+                dels = 0 if del_s == "-" else int(del_s)
+            except ValueError:
+                continue
             insertions += ins
             deletions += dels
             per_file.append((path, ins, dels))
@@ -201,7 +204,7 @@ class Repo:
         except _GitError:
             status = ""
         try:
-            stat = self._run("diff", "--stat")
+            stat = self._run("diff", "HEAD", "--stat")
         except _GitError:
             stat = ""
         return f"{status}\n{stat}".strip()

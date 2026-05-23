@@ -164,3 +164,15 @@ def test_status_diff_stat_includes_status(tmp_path: Path) -> None:
     (repo_path / "file.txt").write_text("a\nb\n")
     output = Repo(repo_path).status_diff_stat()
     assert "file.txt" in output
+
+
+def test_status_diff_stat_includes_staged_changes(tmp_path: Path) -> None:
+    from tests.git_history.fixtures.make_repo import _git
+    repo_path = init_repo(tmp_path / "r")
+    commit(repo_path, "init", content="a\n")
+    (repo_path / "file.txt").write_text("a\nb\n")
+    _git(repo_path, "add", "file.txt")
+    output = Repo(repo_path).status_diff_stat()
+    assert "file.txt" in output
+    # diff HEAD --stat should report 1 insertion for "b"
+    assert "+" in output or "1" in output
