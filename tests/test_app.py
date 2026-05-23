@@ -97,13 +97,41 @@ async def test_save_writes_file(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_sidebar_cycle_includes_debug(tmp_path):
-    from jet.app import JetApp
+async def test_rebound_tab_switch_overrides_editor(tmp_path: Path):
+    """Rebinding next_tab to a key the editor normally claims must still switch tabs."""
+    a = tmp_path / "a.py"
+    b = tmp_path / "b.py"
+    a.write_text("a=1\n")
+    b.write_text("b=2\n")
+    app = JetApp(paths=[a, b])
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        from textual.widgets import TabbedContent
+
+        tabs = app.query_one(TabbedContent)
+        # b.py opened last → active.
+        active_before = tabs.active
+        # Rebind next_tab to ctrl+right (TextArea normally consumes this for word jump).
+        app.set_keymap({"next_tab": "ctrl+right", "prev_tab": "ctrl+left"})
+        ed = app._active_editor()
+        assert ed is not None
+        ed.focus()
+        await pilot.press("ctrl+right")
+        await pilot.pause()
+        assert tabs.active != active_before
+
+
+@pytest.mark.asyncio
+async def test_sidebar_cycle_tree_settings(tmp_path):
     f = tmp_path / "x.py"
     f.write_text("a=1\n")
     app = JetApp([f])
     async with app.run_test() as pilot:
-        # Cycle once: tree -> settings -> debug
+        # Starts on tree. One cycle hides tree and shows settings.
         await pilot.press("ctrl+b")
+        assert app.query_one("#sidebar-tree").display is False
+        assert app.query_one("#sidebar-settings").display is True
+        # Next cycle wraps back to tree.
         await pilot.press("ctrl+b")
-        assert app.query_one("#sidebar-debug").display is True
+        assert app.query_one("#sidebar-tree").display is True
+        assert app.query_one("#sidebar-settings").display is False

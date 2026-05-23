@@ -1,4 +1,4 @@
-"""Syntax-only TextAreaThemes. No background — terminal/app background shows through."""
+"""Shared factory for syntax-only TextAreaThemes. No background — terminal shows through."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from rich.style import Style
 from textual.widgets.text_area import TextAreaTheme
 
 
-def _build(
+def build(
     name: str,
     *,
     fg: str,
@@ -22,8 +22,13 @@ def _build(
     selection: str,
     gutter: str,
     gutter_hl: str,
+    decorator: str,
+    escape: str,
+    param: str,
+    attr: str,
+    constant: str,
+    regexp: str,
 ) -> TextAreaTheme:
-    """Build a syntax theme. Only foreground colors are set; backgrounds stay transparent."""
     return TextAreaTheme(
         name=name,
         base_style=Style(color=fg),
@@ -36,7 +41,13 @@ def _build(
         syntax_styles={
             "string": Style(color=string),
             "string.documentation": Style(color=string, italic=True),
+            "string.escape": Style(color=escape),
+            "string.special": Style(color=escape),
+            "string.regexp": Style(color=regexp, italic=True),
+            "escape": Style(color=escape),
+            "embedded": Style(color=escape),
             "comment": Style(color=comment, italic=True),
+            "comment.documentation": Style(color=comment, italic=True),
             "keyword": Style(color=keyword),
             "keyword.function": Style(color=keyword),
             "keyword.return": Style(color=keyword),
@@ -46,22 +57,40 @@ def _build(
             "exception": Style(color=keyword),
             "include": Style(color=keyword),
             "operator": Style(color=operator),
-            "number": Style(color=number),
-            "float": Style(color=number),
-            "boolean": Style(color=builtin, italic=True),
-            "constant.builtin": Style(color=builtin, italic=True),
-            "variable.builtin": Style(color=builtin, italic=True),
-            "type": Style(color=type_),
-            "type.builtin": Style(color=type_, italic=True),
-            "type.class": Style(color=type_),
-            "class": Style(color=type_),
-            "function": Style(color=func),
-            "function.call": Style(color=func),
-            "method": Style(color=func),
-            "method.call": Style(color=func),
             "punctuation.bracket": Style(color=punct),
             "punctuation.delimiter": Style(color=punct),
             "punctuation.special": Style(color=punct),
+            "number": Style(color=number),
+            "float": Style(color=number),
+            "boolean": Style(color=builtin, italic=True),
+            "constant": Style(color=constant),
+            "constant.builtin": Style(color=builtin, italic=True),
+            "constant.macro": Style(color=decorator),
+            "variable": Style(color=fg),
+            "variable.builtin": Style(color=builtin, italic=True),
+            "variable.parameter": Style(color=param),
+            "parameter": Style(color=param),
+            "field": Style(color=attr),
+            "type": Style(color=type_),
+            "type.builtin": Style(color=type_, italic=True),
+            "type.class": Style(color=type_),
+            "type.definition": Style(color=type_),
+            "type.parameter": Style(color=type_, italic=True),
+            "class": Style(color=type_),
+            "constructor": Style(color=type_),
+            "function": Style(color=func),
+            "function.call": Style(color=func),
+            "function.builtin": Style(color=builtin),
+            "function.macro": Style(color=decorator),
+            "function.method": Style(color=func),
+            "method": Style(color=func),
+            "method.call": Style(color=func),
+            "attribute": Style(color=decorator),
+            "attribute.builtin": Style(color=decorator),
+            "decorator": Style(color=decorator),
+            "property": Style(color=attr),
+            "label": Style(color=comment),
+            "character": Style(color=string),
             "tag": Style(color=keyword),
             "json.label": Style(color=keyword),
             "yaml.field": Style(color=keyword),
@@ -72,91 +101,3 @@ def _build(
             "inline_code": Style(color=string),
         },
     )
-
-
-NEON = _build(
-    "neon",
-    fg="#f5f5f5",
-    comment="#6a7384",
-    keyword="#ff4f8b",
-    string="#d6ff5e",
-    func="#5eeaff",
-    number="#ffae42",
-    type_="#c084fc",
-    builtin="#ff7eb6",
-    operator="#f5f5f5",
-    punct="#9aa5b1",
-    selection="#2a2f3a",
-    gutter="#3a3f4b",
-    gutter_hl="#cdd6f4",
-)
-
-PASTEL = _build(
-    "pastel",
-    fg="#d8d8d8",
-    comment="#6c7387",
-    keyword="#c39bd3",
-    string="#a7d7a7",
-    func="#95c8e6",
-    number="#f1c27d",
-    type_="#b5b3e5",
-    builtin="#f0a8b5",
-    operator="#d8d8d8",
-    punct="#888d96",
-    selection="#2c3140",
-    gutter="#3a3f4b",
-    gutter_hl="#c8cdd9",
-)
-
-MONO = _build(
-    "mono",
-    fg="#e8e8e8",
-    comment="#6a6a6a",
-    keyword="#ffffff",
-    string="#b8b8b8",
-    func="#d4d4d4",
-    number="#a8a8a8",
-    type_="#c4c4c4",
-    builtin="#d0d0d0",
-    operator="#909090",
-    punct="#787878",
-    selection="#333333",
-    gutter="#5a5a5a",
-    gutter_hl="#bdbdbd",
-)
-
-SUNSET = _build(
-    "sunset",
-    fg="#f5e6d3",
-    comment="#7a6a5a",
-    keyword="#ff6b6b",
-    string="#ffd166",
-    func="#f78c6b",
-    number="#ef476f",
-    type_="#ffa07a",
-    builtin="#ffb380",
-    operator="#f5e6d3",
-    punct="#9a8770",
-    selection="#3a2820",
-    gutter="#6e574a",
-    gutter_hl="#d6b89a",
-)
-
-FOREST = _build(
-    "forest",
-    fg="#d4e4d4",
-    comment="#5a705a",
-    keyword="#7fb069",
-    string="#d4d970",
-    func="#74a892",
-    number="#e08d3c",
-    type_="#a3c9a8",
-    builtin="#c7d99f",
-    operator="#d4e4d4",
-    punct="#889988",
-    selection="#2a352a",
-    gutter="#4d5e51",
-    gutter_hl="#a8bfa3",
-)
-
-THEMES: dict[str, TextAreaTheme] = {t.name: t for t in [NEON, PASTEL, MONO, SUNSET, FOREST]}
