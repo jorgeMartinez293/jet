@@ -3,48 +3,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
-from rich.text import Text
 from textual import events
-from textual.message import Message
 from textual.widgets import TextArea
 
 from . import brackets, indent
 from .settings_panel import EditorConfig
 from .syntax import detect_language
-from .theme import THEMES
+from .themes import SYNTAX_THEMES as THEMES
 
 
 class JetEditor(TextArea):
     """Code editor widget. One instance per open buffer/tab."""
-
-    class BreakpointToggleRequested(Message):
-        def __init__(self, editor: "JetEditor", line: int) -> None:
-            super().__init__()
-            self.editor = editor
-            self.line = line
-
-    on_breakpoint_toggle_request: Any = None  # set by App; test hook
-
-    def request_breakpoint_toggle(self, line_1based: int) -> None:
-        if callable(self.on_breakpoint_toggle_request):
-            self.on_breakpoint_toggle_request(line_1based)
-        else:
-            self.post_message(self.BreakpointToggleRequested(self, line_1based))
-
-    def _on_click(self, event) -> None:  # type: ignore[override]
-        meta = getattr(event, "meta", False) or getattr(event, "alt", False)
-        if meta:
-            try:
-                line0, _ = self.get_target_document_location(event)
-            except Exception:
-                super()._on_click(event)
-                return
-            self.request_breakpoint_toggle(line0 + 1)
-            event.stop()
-            return
-        super()._on_click(event)
 
     DEFAULT_CSS = """
     JetEditor {
@@ -71,6 +41,7 @@ class JetEditor(TextArea):
         path: Path | None = None,
         language: str | None = None,
         config: EditorConfig | None = None,
+        read_only: bool = False,
         **kwargs,
     ) -> None:
         cfg = config or EditorConfig()
@@ -78,7 +49,7 @@ class JetEditor(TextArea):
         super().__init__(
             text=text,
             language=lang,
-            soft_wrap=cfg.soft_wrap,
+            soft_wrap=False,
             tab_behavior="indent",
             show_line_numbers=cfg.show_line_numbers,
             **kwargs,
@@ -86,73 +57,16 @@ class JetEditor(TextArea):
         for theme in THEMES.values():
             self.register_theme(theme)
         self.theme = cfg.theme_name
+        self.cursor_blink = False
         self.indent_width = cfg.indent_width
         self.path: Path | None = path
         self._original_text: str = text
-        self._use_tabs: bool = cfg.use_tabs
-        self._breakpoints: frozenset[int] = frozenset()
-        self._current_exec_line: int | None = None
-
-    @property
-    def breakpoints(self) -> frozenset[int]:
-        return self._breakpoints
-
-    def set_breakpoints(self, lines: set[int] | frozenset[int]) -> None:
-        self._breakpoints = frozenset(lines)
-        if self.is_mounted:
-            self.refresh()
-
-    @property
-    def current_exec_line(self) -> int | None:
-        return self._current_exec_line
-
-    def set_current_exec_line(self, line: int | None) -> None:
-        self._current_exec_line = line
-        if self.is_mounted:
-            if line is not None:
-                self.scroll_cursor_visible(center=True)
-            self.refresh()
-
-    def gutter_marker_for_line(self, line_1based: int) -> Text | None:
-        """Return a Rich Text marker for the gutter of `line_1based`, or None.
-
-        Used by the gutter renderer and by tests. Picks theme accent colors
-        for breakpoint (error) and current-exec (warning).
-        """
-        is_bp = line_1based in self._breakpoints
-        is_cur = self._current_exec_line == line_1based
-        if not (is_bp or is_cur):
-            return None
-        if is_cur:
-            return Text("▶", style="bold yellow")
-        return Text("●", style="red")
-
-    def render_line(self, y):  # type: ignore[override]
-        strip = super().render_line(y)
-        try:
-            line_index = self.scroll_offset.y + y
-        except Exception:
-            return strip
-        marker = self.gutter_marker_for_line(line_index + 1)
-        if marker is None:
-            return strip
-        from textual.strip import Strip
-        from rich.segment import Segment
-        segs = list(strip)
-        if not segs:
-            return strip
-        first = segs[0]
-        if first.text:
-            new_first = Segment(marker.plain + first.text[len(marker.plain):], first.style)
-            segs[0] = new_first
-        return Strip(segs, strip.cell_length)
+        self.read_only = read_only
 
     def apply_config(self, config: EditorConfig) -> None:
         self.theme = config.theme_name
         self.show_line_numbers = config.show_line_numbers
-        self.soft_wrap = config.soft_wrap
         self.indent_width = config.indent_width
-        self._use_tabs = config.use_tabs
 
     @property
     def modified(self) -> bool:
@@ -186,12 +100,6 @@ class JetEditor(TextArea):
 
     async def _on_key(self, event: events.Key) -> None:  # type: ignore[override]
         if self.read_only:
-            return
-
-        if event.key == "tab" and self._use_tabs:
-            self.insert("\t", maintain_selection_offset=False)
-            event.prevent_default()
-            event.stop()
             return
 
         if event.key == "enter":
