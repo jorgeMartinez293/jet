@@ -148,15 +148,13 @@ def test_merge_pre_reserves_parent_lane_before_parent_commit() -> None:
     #   m  — merge with parents (p_main, p_feat)
     #   x  — unrelated commit on its own lane that arrives AFTER the merge but
     #         BEFORE p_feat. Without pre-reservation of p_feat's lane,
-    #         allocator could place x on the lane that p_feat ought to occupy.
-    #   p_feat — feature parent
-    #   p_main — main parent (also parent of x)
+    #         x would steal the lane that the merge originally pointed its
+    #         second parent at, forcing p_feat further out.
     p_main = _c("p_main", ())
     p_feat = _c("p_feat", ("p_main",))
     x = _c("x", ("p_main",))
     m = _c("m", ("p_main", "p_feat"))
     refs = [Ref(name="main", kind="local", target_sha=m.sha)]
-    # Order newest-first: m, x, p_feat, p_main
     grid = build_grid(
         [m, x, p_feat, p_main],
         refs,
@@ -164,8 +162,26 @@ def test_merge_pre_reserves_parent_lane_before_parent_commit() -> None:
         head_branch="main",
         dirty=False,
     )
-    # After the merge, the lane for p_feat must already be reserved. So when
-    # x arrives, it must be on a DIFFERENT lane than the one reserved for p_feat.
     lane_of_x = next(r.lane for r in grid.rows if r.commit and r.commit.sha == x.sha)
     lane_of_p_feat = next(r.lane for r in grid.rows if r.commit and r.commit.sha == p_feat.sha)
-    assert lane_of_x != lane_of_p_feat
+    main_lane = grid.main_lane
+    # _open_new_lane iterates candidates [0, 1, -1, 2, -2, ...], so the first
+    # available side lane is always the positive-offset one (lane = main + 1 raw,
+    # after centring shift still the higher of the two side lanes).
+    #
+    # With pre-reservation: after processing m, active_lanes holds both
+    # p_main (lane 0) and p_feat (lane 1).  x therefore must take lane -1
+    # (next free), leaving p_feat at lane 1.  After centring: p_feat ends up
+    # at a higher absolute lane than x.
+    #
+    # Without pre-reservation: active_lanes after m only holds p_main (lane 0).
+    # x takes lane 1 (first free), then p_feat must take lane -1.  After
+    # centring the positions are swapped: x is at the higher lane, p_feat at
+    # the lower lane.
+    #
+    # Discriminating assertion: with the fix p_feat > x; without it p_feat < x.
+    assert lane_of_p_feat > lane_of_x, (
+        f"p_feat (lane {lane_of_p_feat}) should be on the lane reserved by the merge, "
+        f"which is higher than x's lane ({lane_of_x}); "
+        f"main_lane={main_lane}"
+    )
