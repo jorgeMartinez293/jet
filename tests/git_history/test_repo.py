@@ -117,3 +117,50 @@ def test_log_parses_merge_parents(tmp_path: Path) -> None:
     other_parent_subjects = {c.subject for c in commits[1:]}
     assert "feat-1" in other_parent_subjects
     assert "main-1" in other_parent_subjects
+
+
+def test_is_dirty_false_clean(tmp_path: Path) -> None:
+    repo_path = init_repo(tmp_path / "r")
+    commit(repo_path, "init")
+    assert Repo(repo_path).is_dirty() is False
+
+
+def test_is_dirty_true_with_modified(tmp_path: Path) -> None:
+    repo_path = init_repo(tmp_path / "r")
+    commit(repo_path, "init")
+    (repo_path / "file.txt").write_text("changed\n")
+    assert Repo(repo_path).is_dirty() is True
+
+
+def test_stats_for_commit(tmp_path: Path) -> None:
+    repo_path = init_repo(tmp_path / "r")
+    commit(repo_path, "init", content="a\nb\nc\n")
+    commit(repo_path, "edit", content="a\nB\nc\nd\n")
+    repo = Repo(repo_path)
+    full_sha, _ = repo.head()
+    stats = repo.stats(full_sha)
+    assert stats.files_changed == 1
+    assert stats.insertions == 2  # "B" and "d"
+    assert stats.deletions == 1  # "b"
+    assert stats.per_file == (("file.txt", 2, 1),)
+
+
+def test_full_message_returns_complete_body(tmp_path: Path) -> None:
+    from tests.git_history.fixtures.make_repo import _git
+    repo_path = init_repo(tmp_path / "r")
+    (repo_path / "f.txt").write_text("x\n")
+    _git(repo_path, "add", "f.txt")
+    _git(repo_path, "commit", "-q", "-m", "subject line\n\nbody paragraph here")
+    repo = Repo(repo_path)
+    sha, _ = repo.head()
+    msg = repo.full_message(sha)
+    assert msg.startswith("subject line")
+    assert "body paragraph here" in msg
+
+
+def test_status_diff_stat_includes_status(tmp_path: Path) -> None:
+    repo_path = init_repo(tmp_path / "r")
+    commit(repo_path, "init", content="a\n")
+    (repo_path / "file.txt").write_text("a\nb\n")
+    output = Repo(repo_path).status_diff_stat()
+    assert "file.txt" in output

@@ -146,6 +146,71 @@ class Repo:
             result.append(Ref(name=name, kind=kind, target_sha=target))
         return result
 
+    def is_dirty(self) -> bool:
+        try:
+            out = self._run("status", "--porcelain", "--untracked-files=no")
+        except _GitError:
+            return False
+        for line in out.splitlines():
+            if line.strip():
+                return True
+        return False
+
+    def stats(self, sha: str) -> CommitStats:
+        return self._stats_cached(sha)
+
+    @lru_cache(maxsize=1024)
+    def _stats_cached(self, sha: str) -> CommitStats:
+        try:
+            out = self._run("diff-tree", "--numstat", "--no-commit-id", "-r", sha)
+        except _GitError:
+            return CommitStats(0, 0, 0, ())
+        per_file: list[tuple[str, int, int]] = []
+        insertions = deletions = 0
+        for line in out.splitlines():
+            parts = line.split("\t")
+            if len(parts) < 3:
+                continue
+            ins_s, del_s, *path_parts = parts
+            path = "\t".join(path_parts)
+            ins = 0 if ins_s == "-" else int(ins_s)
+            dels = 0 if del_s == "-" else int(del_s)
+            insertions += ins
+            deletions += dels
+            per_file.append((path, ins, dels))
+        return CommitStats(
+            files_changed=len(per_file),
+            insertions=insertions,
+            deletions=deletions,
+            per_file=tuple(per_file),
+        )
+
+    def full_message(self, sha: str) -> str:
+        return self._full_message_cached(sha)
+
+    @lru_cache(maxsize=128)
+    def _full_message_cached(self, sha: str) -> str:
+        try:
+            return self._run("show", "-s", "--format=%B", sha).rstrip("\n")
+        except _GitError:
+            return ""
+
+    def status_diff_stat(self) -> str:
+        try:
+            status = self._run("status", "--short")
+        except _GitError:
+            status = ""
+        try:
+            stat = self._run("diff", "--stat")
+        except _GitError:
+            stat = ""
+        return f"{status}\n{stat}".strip()
+
+    def refresh(self) -> None:
+        """Drop all caches."""
+        self._stats_cached.cache_clear()
+        self._full_message_cached.cache_clear()
+
 
 class _GitError(RuntimeError):
     """Internal — `git` returned non-zero."""
